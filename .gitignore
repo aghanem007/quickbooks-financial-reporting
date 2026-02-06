@@ -1,0 +1,20 @@
+# .env (local only)
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Reports / artifacts
+*_Report_*.xlsx
+*_Report_*.csv
+Balance_Sheet_*.xlsx
+Balance_Sheet_*.csv
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

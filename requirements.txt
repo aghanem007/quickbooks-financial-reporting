@@ -1,0 +1,5 @@
+intuitlib
+python-quickbooks
+pandas
+openpyxl
+python-dotenv
