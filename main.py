@@ -96,6 +96,12 @@ def get_date_range():
             # Custom range
             start_date = input("Enter the start date (YYYY-MM-DD): ").strip()
             end_date = input("Enter the end date (YYYY-MM-DD): ").strip()
+            try:
+                datetime.strptime(start_date, "%Y-%m-%d")
+                datetime.strptime(end_date, "%Y-%m-%d")
+            except ValueError:
+                print("[ERROR] Invalid date format. Please use YYYY-MM-DD (e.g., 2024-01-15).")
+                continue
             return start_date, end_date
 
         if choice == "5":

@@ -44,8 +44,3 @@ Optional:
 ## Notes
 - This project uses OAuth tokens. Do not commit real credentials to GitHub.
 - Reports are generated in the project directory.
-
-## Roadmap
-- Improve accounting logic (account types, accrual/cash basis)
-- Add pagination, retries, and error handling
-- Add tests and CI

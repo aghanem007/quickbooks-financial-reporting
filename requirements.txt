@@ -1,5 +1,5 @@
-intuitlib
-python-quickbooks
-pandas
-openpyxl
-python-dotenv
+intuitlib>=1.3.0
+python-quickbooks>=1.1.0
+pandas>=2.0.0
+openpyxl>=3.1.0
+python-dotenv>=1.0.0
