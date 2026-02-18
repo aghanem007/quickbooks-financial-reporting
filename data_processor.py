@@ -129,18 +129,83 @@ class DataProcessor:
             "Net Income": net_income,
         }
 
+    # Standard ordering for balance sheet sections
+    _BS_SECTION_ORDER = ["Bank", "Accounts Receivable", "Other Current Asset",
+                         "Fixed Asset", "Other Asset",
+                         "Accounts Payable", "Other Current Liability",
+                         "Long Term Liability", "Equity"]
+
+    _BS_GROUP_MAP = {
+        "Bank": "Assets",
+        "Accounts Receivable": "Assets",
+        "Other Current Asset": "Assets",
+        "Fixed Asset": "Assets",
+        "Other Asset": "Assets",
+        "Accounts Payable": "Liabilities",
+        "Other Current Liability": "Liabilities",
+        "Long Term Liability": "Liabilities",
+        "Credit Card": "Liabilities",
+        "Equity": "Equity",
+    }
+
     def generate_balance_sheet_data(self, accounts):
         """
-        Simple example of generating a balance sheet dictionary:
-        {account_name: current_balance}
+        Build a structured balance sheet grouped by account type.
+
+        Returns a list of row dicts:
+        [{"Account": ..., "Balance": ..., "row_type": "section"|"detail"|"subtotal"}, ...]
+        Falls back to a flat dict if accounts lack AccountType.
         """
         if not accounts:
             return {}
 
-        balance_data = {}
-        for acc in accounts:
-            acc_name = getattr(acc, "Name", "Unknown Account")
-            acc_balance = getattr(acc, "CurrentBalance", 0)
-            balance_data[acc_name] = acc_balance
+        # Check if we have AccountType info
+        has_types = any(getattr(acc, "AccountType", None) for acc in accounts)
+        if not has_types:
+            return {getattr(acc, "Name", "Unknown"): getattr(acc, "CurrentBalance", 0)
+                    for acc in accounts}
 
-        return balance_data
+        # Group accounts by AccountType
+        grouped = {}
+        for acc in accounts:
+            acc_type = getattr(acc, "AccountType", "Other")
+            acc_name = getattr(acc, "Name", "Unknown Account")
+            acc_balance = getattr(acc, "CurrentBalance", 0) or 0
+            grouped.setdefault(acc_type, []).append((acc_name, float(acc_balance)))
+
+        # Build ordered rows
+        rows = []
+        section_totals = {}  # Assets, Liabilities, Equity
+
+        for acc_type in self._BS_SECTION_ORDER:
+            if acc_type not in grouped:
+                continue
+
+            group = self._BS_GROUP_MAP.get(acc_type, "Other")
+            rows.append({"Account": acc_type, "Balance": None, "row_type": "section"})
+
+            subtotal = 0
+            for name, balance in sorted(grouped[acc_type], key=lambda x: x[0]):
+                rows.append({"Account": f"  {name}", "Balance": balance, "row_type": "detail"})
+                subtotal += balance
+
+            rows.append({"Account": f"Total {acc_type}", "Balance": subtotal, "row_type": "subtotal"})
+            rows.append({"Account": "", "Balance": None, "row_type": "spacer"})
+
+            section_totals[group] = section_totals.get(group, 0) + subtotal
+
+        # Handle any account types not in our predefined order
+        for acc_type, accts in grouped.items():
+            if acc_type in self._BS_SECTION_ORDER:
+                continue
+            group = self._BS_GROUP_MAP.get(acc_type, "Other")
+            rows.append({"Account": acc_type, "Balance": None, "row_type": "section"})
+            subtotal = 0
+            for name, balance in sorted(accts, key=lambda x: x[0]):
+                rows.append({"Account": f"  {name}", "Balance": balance, "row_type": "detail"})
+                subtotal += balance
+            rows.append({"Account": f"Total {acc_type}", "Balance": subtotal, "row_type": "subtotal"})
+            rows.append({"Account": "", "Balance": None, "row_type": "spacer"})
+            section_totals[group] = section_totals.get(group, 0) + subtotal
+
+        return {"rows": rows, "section_totals": section_totals}

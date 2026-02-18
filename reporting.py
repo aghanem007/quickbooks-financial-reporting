@@ -162,14 +162,103 @@ class ReportGenerator:
                              report_date=None):
         """
         Export a Balance Sheet.
-        If balance_data is a dict, convert it to a DataFrame.
-        Otherwise, assume it is already a DataFrame.
+        Accepts structured data (with rows + section_totals) or a flat dict/DataFrame.
         """
-        if isinstance(balance_data, dict):
-            df = pd.DataFrame(list(balance_data.items()), columns=["Account", "Balance"])
-        else:
-            df = balance_data
+        # Determine if we have the new grouped format
+        is_grouped = isinstance(balance_data, dict) and "rows" in balance_data
 
+        if not is_grouped:
+            if isinstance(balance_data, dict):
+                df = pd.DataFrame(list(balance_data.items()), columns=["Account", "Balance"])
+            else:
+                df = balance_data
+            return self._export_flat_balance_sheet(df, file_name, report_date)
+
+        rows = balance_data["rows"]
+        section_totals = balance_data.get("section_totals", {})
+
+        if self.output_format == "csv":
+            csv_rows = [(r["Account"], r["Balance"]) for r in rows if r["row_type"] != "spacer"]
+            df = pd.DataFrame(csv_rows, columns=["Account", "Balance"])
+            df.to_csv(f"{file_name}.csv", index=False)
+            print(f"[INFO] Balance Sheet report saved as: {file_name}.csv")
+            return
+
+        path = f"{file_name}.xlsx"
+        from openpyxl import Workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Balance Sheet"
+
+        # Title
+        ws.merge_cells("A1:B1")
+        ws["A1"].value = "Balance Sheet"
+        ws["A1"].font = self._title_font
+        ws["A1"].alignment = Alignment(horizontal="left")
+
+        # Subtitle
+        ws.merge_cells("A2:B2")
+        ws["A2"].value = f"As of: {report_date}" if report_date else "As of: Current"
+        ws["A2"].font = self._subtitle_font
+
+        # Column headers
+        for col_num, header in enumerate(["Account", "Balance"], 1):
+            cell = ws.cell(row=4, column=col_num, value=header)
+            cell.font = self._header_font
+            cell.fill = self._header_fill
+            cell.alignment = Alignment(horizontal="center")
+            cell.border = self._thin_border
+
+        # Write rows
+        current_row = 5
+        for row in rows:
+            rt = row["row_type"]
+            if rt == "spacer":
+                current_row += 1
+                continue
+
+            acct_cell = ws.cell(row=current_row, column=1, value=row["Account"])
+            bal_cell = ws.cell(row=current_row, column=2, value=row["Balance"])
+
+            for c in (acct_cell, bal_cell):
+                c.border = self._thin_border
+            if row["Balance"] is not None:
+                bal_cell.number_format = self._currency_format
+                bal_cell.alignment = Alignment(horizontal="right")
+
+            if rt == "section":
+                acct_cell.font = self._section_font
+                acct_cell.fill = self._section_fill
+                bal_cell.fill = self._section_fill
+            elif rt == "subtotal":
+                acct_cell.font = Font(bold=True, size=11)
+                bal_cell.font = Font(bold=True, size=11)
+
+            current_row += 1
+
+        # Summary: Total Assets / Liabilities / Equity
+        current_row += 1
+        for group in ["Assets", "Liabilities", "Equity"]:
+            if group not in section_totals:
+                continue
+            acct_cell = ws.cell(row=current_row, column=1, value=f"Total {group}")
+            bal_cell = ws.cell(row=current_row, column=2, value=section_totals[group])
+            acct_cell.font = self._highlight_font
+            acct_cell.fill = self._highlight_fill
+            bal_cell.font = self._highlight_font
+            bal_cell.fill = self._highlight_fill
+            bal_cell.number_format = self._currency_format
+            bal_cell.alignment = Alignment(horizontal="right")
+            for c in (acct_cell, bal_cell):
+                c.border = self._thin_border
+            current_row += 1
+
+        self._auto_fit_columns(ws)
+        wb.save(path)
+        print(f"[INFO] Balance Sheet report saved as: {path}")
+
+    def _export_flat_balance_sheet(self, df, file_name, report_date):
+        """Flat balance sheet export (no account grouping)."""
         if self.output_format == "csv":
             df.to_csv(f"{file_name}.csv", index=False)
             print(f"[INFO] Balance Sheet report saved as: {file_name}.csv")
@@ -179,23 +268,17 @@ class ReportGenerator:
         with pd.ExcelWriter(path, engine="openpyxl") as writer:
             df.to_excel(writer, index=False, sheet_name="Balance Sheet", startrow=3)
             ws = writer.sheets["Balance Sheet"]
-
             num_cols = len(df.columns)
 
-            # Title
             ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=num_cols)
-            title_cell = ws["A1"]
-            title_cell.value = "Balance Sheet"
-            title_cell.font = self._title_font
-            title_cell.alignment = Alignment(horizontal="left")
+            ws["A1"].value = "Balance Sheet"
+            ws["A1"].font = self._title_font
+            ws["A1"].alignment = Alignment(horizontal="left")
 
-            # Subtitle
             ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=num_cols)
-            subtitle_cell = ws["A2"]
-            subtitle_cell.value = f"As of: {report_date}" if report_date else "As of: Current"
-            subtitle_cell.font = self._subtitle_font
+            ws["A2"].value = f"As of: {report_date}" if report_date else "As of: Current"
+            ws["A2"].font = self._subtitle_font
 
-            # Style column headers (row 4)
             for col_num in range(1, num_cols + 1):
                 cell = ws.cell(row=4, column=col_num)
                 cell.font = self._header_font
@@ -203,12 +286,10 @@ class ReportGenerator:
                 cell.alignment = Alignment(horizontal="center")
                 cell.border = self._thin_border
 
-            # Style data rows
             for row_num in range(5, 5 + len(df)):
                 for col_num in range(1, num_cols + 1):
                     cell = ws.cell(row=row_num, column=col_num)
                     cell.border = self._thin_border
-                    # Currency format on Balance column (last column)
                     if col_num == num_cols:
                         cell.number_format = self._currency_format
                         cell.alignment = Alignment(horizontal="right")
