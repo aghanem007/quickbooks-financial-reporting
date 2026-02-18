@@ -1,5 +1,6 @@
 import os
 import sys
+import argparse
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from qb_client import MyQBClient
@@ -15,6 +16,17 @@ REQUIRED_ENV_VARS = [
     "REALM_ID",
     "ACCESS_TOKEN",
 ]
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="QuickBooks Financial Reporting")
+    parser.add_argument("--start-date", help="Start date (YYYY-MM-DD)")
+    parser.add_argument("--end-date", help="End date (YYYY-MM-DD)")
+    parser.add_argument("--format", choices=["excel", "csv"], default="excel",
+                        help="Output format (default: excel)")
+    parser.add_argument("--period", choices=["monthly", "quarterly", "yearly"],
+                        help="Preset period (overrides start/end dates)")
+    return parser.parse_args()
 
 
 def load_config():
@@ -41,6 +53,37 @@ def load_config():
     }
 
 
+def resolve_period(period):
+    """Convert a preset period name to (start_date, end_date) strings."""
+    today = datetime.now()
+
+    if period == "monthly":
+        first = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+        last = today.replace(day=1) - timedelta(days=1)
+        return first.strftime("%Y-%m-%d"), last.strftime("%Y-%m-%d")
+
+    if period == "quarterly":
+        current_month = today.month
+        quarter_start_month = ((current_month - 1) // 3) * 3 + 1 - 3
+        quarter_end_month = quarter_start_month + 2
+
+        if quarter_start_month < 1:
+            quarter_start_month += 12
+            quarter_end_month += 12
+            start_date = today.replace(year=today.year - 1, month=quarter_start_month, day=1)
+        else:
+            start_date = today.replace(month=quarter_start_month, day=1)
+
+        end_date = (
+            start_date.replace(month=quarter_end_month, day=1) + timedelta(days=32)
+        ).replace(day=1) - timedelta(days=1)
+        return start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")
+
+    if period == "yearly":
+        start_date = today.replace(month=1, day=1)
+        return start_date.strftime("%Y-%m-%d"), today.strftime("%Y-%m-%d")
+
+
 def get_date_range():
     """
     Provides a menu for users to select a date range for reports.
@@ -58,42 +101,15 @@ def get_date_range():
         today = datetime.now()
 
         if choice == "1":
-            # Monthly: Previous month
-            first_day_last_month = (
-                today.replace(day=1) - timedelta(days=1)
-            ).replace(day=1).strftime("%Y-%m-%d")
-            last_day_last_month = (
-                today.replace(day=1) - timedelta(days=1)
-            ).strftime("%Y-%m-%d")
-            return first_day_last_month, last_day_last_month
+            return resolve_period("monthly")
 
         if choice == "2":
-            # Quarterly: Last quarter
-            current_month = today.month
-            quarter_start_month = ((current_month - 1) // 3) * 3 + 1 - 3
-            quarter_end_month = quarter_start_month + 2
-
-            if quarter_start_month < 1:  # Handle year wrap-around for Q4
-                quarter_start_month += 12
-                quarter_end_month += 12
-                start_date = today.replace(year=today.year - 1, month=quarter_start_month, day=1)
-            else:
-                start_date = today.replace(month=quarter_start_month, day=1)
-
-            end_date = (
-                start_date.replace(month=quarter_end_month, day=1) + timedelta(days=32)
-            ).replace(day=1) - timedelta(days=1)
-
-            return start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")
+            return resolve_period("quarterly")
 
         if choice == "3":
-            # Yearly: Year-to-Date (YTD)
-            start_date = today.replace(month=1, day=1).strftime("%Y-%m-%d")
-            end_date = today.strftime("%Y-%m-%d")
-            return start_date, end_date
+            return resolve_period("yearly")
 
         if choice == "4":
-            # Custom range
             start_date = input("Enter the start date (YYYY-MM-DD): ").strip()
             end_date = input("Enter the end date (YYYY-MM-DD): ").strip()
             try:
@@ -115,6 +131,7 @@ def main():
     """
     Orchestrates the financial reporting process.
     """
+    args = parse_args()
     config = load_config()
 
     qb_client = MyQBClient(
@@ -146,7 +163,13 @@ def main():
             print(f"[ERROR] An unexpected error occurred while verifying token:\n{e}")
             sys.exit(1)
 
-    start_date, end_date = get_date_range()
+    # Determine date range from CLI args or interactive menu
+    if args.period:
+        start_date, end_date = resolve_period(args.period)
+    elif args.start_date and args.end_date:
+        start_date, end_date = args.start_date, args.end_date
+    else:
+        start_date, end_date = get_date_range()
 
     try:
         print(f"[INFO] Fetching Invoices for period: {start_date} to {end_date}...")
@@ -168,8 +191,9 @@ def main():
     pl_statement = processor.generate_profit_loss_statement(invoices, bills)
     balance_data = processor.generate_balance_sheet_data(accounts)
 
+    output_format = args.format
     current_date = datetime.now().strftime("%Y_%m_%d")
-    report_gen = ReportGenerator(output_format="excel")
+    report_gen = ReportGenerator(output_format=output_format)
     report_gen.export_profit_loss(pl_statement, file_name=f"PL_Report_{current_date}",
                                   start_date=start_date, end_date=end_date)
     report_gen.export_balance_sheet(balance_data, file_name=f"Balance_Sheet_{current_date}",
