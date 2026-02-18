@@ -172,8 +172,10 @@ def main():
 
     current_date = datetime.now().strftime("%Y_%m_%d")
     report_gen = ReportGenerator(output_format="excel")
-    report_gen.export_profit_loss(pl_statement, file_name=f"PL_Report_{current_date}")
-    report_gen.export_balance_sheet(balance_data, file_name=f"Balance_Sheet_{current_date}")
+    report_gen.export_profit_loss(pl_statement, file_name=f"PL_Report_{current_date}",
+                                  start_date=start_date, end_date=end_date)
+    report_gen.export_balance_sheet(balance_data, file_name=f"Balance_Sheet_{current_date}",
+                                    report_date=end_date)
 
     print("[INFO] Financial reporting completed successfully.")
 
