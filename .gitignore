@@ -13,6 +13,8 @@ __pycache__/
 *_Report_*.csv
 Balance_Sheet_*.xlsx
 Balance_Sheet_*.csv
+Sample_*.xlsx
+Sample_*.csv
 
 # OS / editor
 .DS_Store
