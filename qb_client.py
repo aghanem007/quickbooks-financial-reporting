@@ -1,9 +1,16 @@
 # qb_client.py
+import time
+import random
 from intuitlib.client import AuthClient
 from quickbooks import QuickBooks
 from quickbooks.objects.invoice import Invoice
 from quickbooks.objects.bill import Bill
 from quickbooks.objects.account import Account
+from quickbooks.exceptions import AuthorizationException, QuickbooksException
+
+MAX_RESULTS_PER_PAGE = 100
+MAX_RETRIES = 4
+BASE_DELAY = 1.0  # seconds
 
 class MyQBClient:
     """
@@ -53,27 +60,69 @@ class MyQBClient:
         self.auth_client.refresh_token()
         print("[INFO] Tokens refreshed successfully.")
 
+    def _retry_call(self, func):
+        """Execute a QB API call with exponential backoff on transient errors."""
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                return func()
+            except AuthorizationException:
+                raise  # Don't retry auth errors
+            except QuickbooksException as e:
+                if attempt == MAX_RETRIES:
+                    raise
+                delay = BASE_DELAY * (2 ** attempt) + random.uniform(0, 1)
+                print(f"[WARNING] API call failed (attempt {attempt + 1}/{MAX_RETRIES + 1}): {e}")
+                print(f"[INFO] Retrying in {delay:.1f}s...")
+                time.sleep(delay)
+
+    def _paginate(self, entity_class, filters=None):
+        """Fetch all records with automatic pagination."""
+        all_records = []
+        start = 1
+
+        while True:
+            if filters:
+                page = self._retry_call(
+                    lambda s=start: entity_class.where(
+                        filters, start_position=s,
+                        max_results=MAX_RESULTS_PER_PAGE, qb=self.qb_client
+                    )
+                )
+            else:
+                page = self._retry_call(
+                    lambda s=start: entity_class.all(
+                        start_position=s,
+                        max_results=MAX_RESULTS_PER_PAGE, qb=self.qb_client
+                    )
+                )
+
+            if not page:
+                break
+
+            all_records.extend(page)
+
+            if len(page) < MAX_RESULTS_PER_PAGE:
+                break
+
+            start += MAX_RESULTS_PER_PAGE
+
+        return all_records
+
     def get_invoices(self, filters=None):
         """
         Retrieve a list of invoices with optional filters.
         filters example: "DocNumber='1001' AND Balance>0"
         """
-        if filters:
-            return Invoice.where(filters, qb=self.qb_client)
-        return Invoice.all(qb=self.qb_client)
+        return self._paginate(Invoice, filters)
 
     def get_bills(self, filters=None):
         """
         Retrieve a list of bills with optional filters.
         """
-        if filters:
-            return Bill.where(filters, qb=self.qb_client)
-        return Bill.all(qb=self.qb_client)
+        return self._paginate(Bill, filters)
 
     def get_accounts(self, filters=None):
         """
         Retrieve a list of accounts with optional filters.
         """
-        if filters:
-            return Account.where(filters, qb=self.qb_client)
-        return Account.all(qb=self.qb_client)
+        return self._paginate(Account, filters)
