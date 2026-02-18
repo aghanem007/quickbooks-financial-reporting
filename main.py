@@ -165,9 +165,7 @@ def main():
         return
 
     processor = DataProcessor()
-    df_invoices = processor.process_invoices(invoices)
-    df_bills = processor.process_bills(bills)
-    pl_statement = processor.generate_profit_loss_statement(df_invoices, df_bills)
+    pl_statement = processor.generate_profit_loss_statement(invoices, bills)
     balance_data = processor.generate_balance_sheet_data(accounts)
 
     current_date = datetime.now().strftime("%Y_%m_%d")
