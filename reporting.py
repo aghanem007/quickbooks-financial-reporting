@@ -40,73 +40,122 @@ class ReportGenerator:
                     max_len = max(max_len, len(str(cell.value)))
             ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
 
+    def _build_pl_rows(self, pl_statement):
+        """Build row data for the P&L report from either detailed or simple format."""
+        rows = []  # list of (label, amount, style) where style is 'section', 'detail', 'subtotal', or 'total'
+
+        has_detail = "revenue_detail" in pl_statement
+
+        if has_detail:
+            # Revenue section
+            rows.append(("Revenue", None, "section"))
+            for cat, amt in pl_statement["revenue_detail"].items():
+                rows.append((f"  {cat}", amt, "detail"))
+            rows.append(("Total Revenue", pl_statement["Total Revenue"], "subtotal"))
+
+            rows.append(("", None, "spacer"))
+
+            # Expense section
+            rows.append(("Expenses", None, "section"))
+            for cat, amt in pl_statement["expense_detail"].items():
+                rows.append((f"  {cat}", amt, "detail"))
+            rows.append(("Total Expenses", pl_statement["Total Expenses"], "subtotal"))
+
+            rows.append(("", None, "spacer"))
+
+            # Gross Profit
+            rows.append(("Gross Profit", pl_statement.get("Gross Profit", 0), "subtotal"))
+
+            rows.append(("", None, "spacer"))
+        else:
+            rows.append(("Total Revenue", pl_statement.get("Total Revenue", 0), "detail"))
+            rows.append(("Total Expenses", pl_statement.get("Total Expenses", 0), "detail"))
+            rows.append(("", None, "spacer"))
+
+        # Net Income (always last)
+        rows.append(("Net Income", pl_statement.get("Net Income", 0), "total"))
+
+        return rows
+
     def export_profit_loss(self, pl_statement, file_name="profit_loss_report",
                            start_date=None, end_date=None):
         """
         Save a P&L statement in Excel or CSV format.
+        Supports both simple (3-line) and detailed (categorized) formats.
         """
-        data = {
-            "Metric": ["Total Revenue", "Total Expenses", "Net Income"],
-            "Amount": [
-                pl_statement.get("Total Revenue", 0),
-                pl_statement.get("Total Expenses", 0),
-                pl_statement.get("Net Income", 0),
-            ],
-        }
-        df = pd.DataFrame(data)
+        rows = self._build_pl_rows(pl_statement)
 
         if self.output_format == "csv":
+            df = pd.DataFrame([(r[0], r[1]) for r in rows if r[2] != "spacer"],
+                              columns=["Metric", "Amount"])
             df.to_csv(f"{file_name}.csv", index=False)
             print(f"[INFO] P&L report saved as: {file_name}.csv")
             return
 
         path = f"{file_name}.xlsx"
-        with pd.ExcelWriter(path, engine="openpyxl") as writer:
-            df.to_excel(writer, index=False, sheet_name="Profit & Loss", startrow=3)
-            ws = writer.sheets["Profit & Loss"]
+        from openpyxl import Workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Profit & Loss"
 
-            # Title
-            ws.merge_cells("A1:B1")
-            title_cell = ws["A1"]
-            title_cell.value = "Profit & Loss Statement"
-            title_cell.font = self._title_font
-            title_cell.alignment = Alignment(horizontal="left")
+        # Title
+        ws.merge_cells("A1:B1")
+        title_cell = ws["A1"]
+        title_cell.value = "Profit & Loss Statement"
+        title_cell.font = self._title_font
+        title_cell.alignment = Alignment(horizontal="left")
 
-            # Subtitle with date range
-            ws.merge_cells("A2:B2")
-            subtitle_cell = ws["A2"]
-            if start_date and end_date:
-                subtitle_cell.value = f"Period: {start_date} to {end_date}"
-            else:
-                subtitle_cell.value = "Period: All Dates"
-            subtitle_cell.font = self._subtitle_font
+        # Subtitle
+        ws.merge_cells("A2:B2")
+        subtitle_cell = ws["A2"]
+        if start_date and end_date:
+            subtitle_cell.value = f"Period: {start_date} to {end_date}"
+        else:
+            subtitle_cell.value = "Period: All Dates"
+        subtitle_cell.font = self._subtitle_font
 
-            # Style column headers (row 4 because startrow=3)
-            for col_num in range(1, 3):
-                cell = ws.cell(row=4, column=col_num)
-                cell.font = self._header_font
-                cell.fill = self._header_fill
-                cell.alignment = Alignment(horizontal="center")
-                cell.border = self._thin_border
+        # Column headers on row 4
+        for col_num, header in enumerate(["Metric", "Amount"], 1):
+            cell = ws.cell(row=4, column=col_num, value=header)
+            cell.font = self._header_font
+            cell.fill = self._header_fill
+            cell.alignment = Alignment(horizontal="center")
+            cell.border = self._thin_border
 
-            # Style data rows
-            for row_num in range(5, 5 + len(df)):
-                for col_num in range(1, 3):
-                    cell = ws.cell(row=row_num, column=col_num)
-                    cell.border = self._thin_border
-                    if col_num == 2:
-                        cell.number_format = self._currency_format
-                        cell.alignment = Alignment(horizontal="right")
+        # Write data rows starting at row 5
+        current_row = 5
+        for label, amount, style in rows:
+            if style == "spacer":
+                current_row += 1
+                continue
 
-            # Highlight Net Income row (last data row)
-            net_income_row = 5 + len(df) - 1
-            for col_num in range(1, 3):
-                cell = ws.cell(row=net_income_row, column=col_num)
-                cell.fill = self._highlight_fill
-                cell.font = self._highlight_font
+            label_cell = ws.cell(row=current_row, column=1, value=label)
+            amt_cell = ws.cell(row=current_row, column=2, value=amount)
 
-            self._auto_fit_columns(ws)
+            # Apply borders and currency to all non-spacer rows
+            for c in (label_cell, amt_cell):
+                c.border = self._thin_border
+            if amount is not None:
+                amt_cell.number_format = self._currency_format
+                amt_cell.alignment = Alignment(horizontal="right")
 
+            if style == "section":
+                label_cell.font = self._section_font
+                label_cell.fill = self._section_fill
+                amt_cell.fill = self._section_fill
+            elif style == "subtotal":
+                label_cell.font = Font(bold=True, size=11)
+                amt_cell.font = Font(bold=True, size=11)
+            elif style == "total":
+                label_cell.font = self._highlight_font
+                label_cell.fill = self._highlight_fill
+                amt_cell.font = self._highlight_font
+                amt_cell.fill = self._highlight_fill
+
+            current_row += 1
+
+        self._auto_fit_columns(ws)
+        wb.save(path)
         print(f"[INFO] P&L report saved as: {path}")
 
     def export_balance_sheet(self, balance_data, file_name="balance_sheet_report",
