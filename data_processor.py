@@ -209,3 +209,88 @@ class DataProcessor:
             section_totals[group] = section_totals.get(group, 0) + subtotal
 
         return {"rows": rows, "section_totals": section_totals}
+
+    def _sum_balances_by_type(self, accounts):
+        """Sum account balances grouped by AccountType."""
+        totals = {}
+        for acc in accounts:
+            acc_type = getattr(acc, "AccountType", "Other")
+            balance = float(getattr(acc, "CurrentBalance", 0) or 0)
+            totals[acc_type] = totals.get(acc_type, 0) + balance
+        return totals
+
+    def generate_cash_flow_statement(self, pl_data, accounts):
+        """
+        Build a cash flow statement using the indirect method.
+
+        Takes net income from the P&L and uses account balances to
+        derive operating adjustments, investing, and financing sections.
+        """
+        if not accounts:
+            return {
+                "operating": {}, "net_operating": 0,
+                "investing": {}, "net_investing": 0,
+                "financing": {}, "net_financing": 0,
+                "net_income": 0, "net_change_in_cash": 0,
+                "ending_cash": 0,
+            }
+
+        net_income = pl_data.get("Net Income", 0)
+        by_type = self._sum_balances_by_type(accounts)
+
+        # Operating: start with net income, adjust for working capital
+        operating = {}
+        ar = by_type.get("Accounts Receivable", 0)
+        if ar:
+            operating["Accounts Receivable"] = -ar
+        ap = by_type.get("Accounts Payable", 0)
+        if ap:
+            operating["Accounts Payable"] = ap
+        other_ca = by_type.get("Other Current Asset", 0)
+        if other_ca:
+            operating["Other Current Assets"] = -other_ca
+        other_cl = by_type.get("Other Current Liability", 0)
+        if other_cl:
+            operating["Other Current Liabilities"] = other_cl
+        credit_card = by_type.get("Credit Card", 0)
+        if credit_card:
+            operating["Credit Card Liabilities"] = credit_card
+
+        net_operating = net_income + sum(operating.values())
+
+        # Investing: fixed and other long-term assets
+        investing = {}
+        fixed = by_type.get("Fixed Asset", 0)
+        if fixed:
+            investing["Fixed Assets"] = -fixed
+        other_asset = by_type.get("Other Asset", 0)
+        if other_asset:
+            investing["Other Assets"] = -other_asset
+
+        net_investing = sum(investing.values())
+
+        # Financing: long-term liabilities and equity
+        financing = {}
+        lt_liab = by_type.get("Long Term Liability", 0)
+        if lt_liab:
+            financing["Long Term Liabilities"] = lt_liab
+        equity = by_type.get("Equity", 0)
+        if equity:
+            financing["Equity"] = equity
+
+        net_financing = sum(financing.values())
+
+        net_change = net_operating + net_investing + net_financing
+        ending_cash = by_type.get("Bank", 0)
+
+        return {
+            "net_income": net_income,
+            "operating": operating,
+            "net_operating": net_operating,
+            "investing": investing,
+            "net_investing": net_investing,
+            "financing": financing,
+            "net_financing": net_financing,
+            "net_change_in_cash": net_change,
+            "ending_cash": ending_cash,
+        }

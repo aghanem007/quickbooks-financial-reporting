@@ -193,3 +193,80 @@ class TestBalanceSheet:
         assert "section" in row_types
         assert "detail" in row_types
         assert "subtotal" in row_types
+
+
+# --- Cash Flow Statement ---
+
+class TestCashFlow:
+    def test_empty_accounts(self, processor):
+        pl = {"Net Income": 0}
+        result = processor.generate_cash_flow_statement(pl, [])
+        assert result["net_income"] == 0
+        assert result["net_operating"] == 0
+        assert result["net_investing"] == 0
+        assert result["net_financing"] == 0
+        assert result["ending_cash"] == 0
+
+    def test_operating_section(self, processor):
+        pl = {"Net Income": 5000}
+        accounts = [
+            MockAccount("Checking", 8000, "Bank"),
+            MockAccount("AR", 2000, "Accounts Receivable"),
+            MockAccount("AP", 1500, "Accounts Payable"),
+        ]
+        result = processor.generate_cash_flow_statement(pl, accounts)
+        assert result["net_income"] == 5000
+        assert result["operating"]["Accounts Receivable"] == -2000
+        assert result["operating"]["Accounts Payable"] == 1500
+        # net operating = 5000 + (-2000) + 1500 = 4500
+        assert result["net_operating"] == 4500
+
+    def test_investing_section(self, processor):
+        pl = {"Net Income": 0}
+        accounts = [
+            MockAccount("Equipment", 10000, "Fixed Asset"),
+            MockAccount("Goodwill", 5000, "Other Asset"),
+        ]
+        result = processor.generate_cash_flow_statement(pl, accounts)
+        assert result["investing"]["Fixed Assets"] == -10000
+        assert result["investing"]["Other Assets"] == -5000
+        assert result["net_investing"] == -15000
+
+    def test_financing_section(self, processor):
+        pl = {"Net Income": 0}
+        accounts = [
+            MockAccount("Bank Loan", 20000, "Long Term Liability"),
+            MockAccount("Owner Equity", 50000, "Equity"),
+        ]
+        result = processor.generate_cash_flow_statement(pl, accounts)
+        assert result["financing"]["Long Term Liabilities"] == 20000
+        assert result["financing"]["Equity"] == 50000
+        assert result["net_financing"] == 70000
+
+    def test_full_statement(self, processor):
+        pl = {"Net Income": 10000}
+        accounts = [
+            MockAccount("Checking", 15000, "Bank"),
+            MockAccount("AR", 3000, "Accounts Receivable"),
+            MockAccount("AP", 2000, "Accounts Payable"),
+            MockAccount("Equipment", 8000, "Fixed Asset"),
+            MockAccount("Owner Equity", 30000, "Equity"),
+        ]
+        result = processor.generate_cash_flow_statement(pl, accounts)
+        assert result["net_income"] == 10000
+        assert result["ending_cash"] == 15000
+        # operating = 10000 + (-3000) + 2000 = 9000
+        assert result["net_operating"] == 9000
+        # investing = -8000
+        assert result["net_investing"] == -8000
+        # financing = 30000
+        assert result["net_financing"] == 30000
+
+    def test_zero_balances_excluded(self, processor):
+        pl = {"Net Income": 1000}
+        accounts = [
+            MockAccount("Checking", 5000, "Bank"),
+            MockAccount("AR", 0, "Accounts Receivable"),
+        ]
+        result = processor.generate_cash_flow_statement(pl, accounts)
+        assert "Accounts Receivable" not in result["operating"]

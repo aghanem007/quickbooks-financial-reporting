@@ -129,3 +129,65 @@ class TestBSExport:
         # Check that Balance column has currency format
         for row in ws.iter_rows(min_row=5, max_row=5, min_col=2, max_col=2):
             assert "$" in row[0].number_format
+
+
+# --- Cash Flow Export ---
+
+class TestCFExport:
+    def _sample_cf(self):
+        return {
+            "net_income": 10000,
+            "operating": {"Accounts Receivable": -3000, "Accounts Payable": 2000},
+            "net_operating": 9000,
+            "investing": {"Fixed Assets": -5000},
+            "net_investing": -5000,
+            "financing": {"Equity": 20000},
+            "net_financing": 20000,
+            "net_change_in_cash": 24000,
+            "ending_cash": 15000,
+        }
+
+    def test_cf_excel_creates_file(self, rg):
+        rg.export_cash_flow(self._sample_cf(), file_name="test_cf")
+        assert os.path.exists("test_cf.xlsx")
+
+    def test_cf_excel_title(self, rg):
+        rg.export_cash_flow(self._sample_cf(), file_name="test_cf")
+        wb = load_workbook("test_cf.xlsx")
+        ws = wb.active
+        assert ws["A1"].value == "Cash Flow Statement"
+
+    def test_cf_excel_sections(self, rg):
+        rg.export_cash_flow(self._sample_cf(), file_name="test_cf")
+        wb = load_workbook("test_cf.xlsx")
+        ws = wb.active
+        values = [ws.cell(row=r, column=1).value for r in range(1, ws.max_row + 1)]
+        assert "Cash Flows from Operating Activities" in values
+        assert "Cash Flows from Investing Activities" in values
+        assert "Cash Flows from Financing Activities" in values
+        assert "Net Change in Cash" in values
+        assert "Ending Cash Balance" in values
+
+    def test_cf_excel_with_dates(self, rg):
+        rg.export_cash_flow(self._sample_cf(), file_name="test_cf",
+                            start_date="2025-01-01", end_date="2025-12-31")
+        wb = load_workbook("test_cf.xlsx")
+        ws = wb.active
+        assert "2025-01-01" in ws["A2"].value
+
+    def test_cf_csv(self, rg_csv):
+        rg_csv.export_cash_flow(self._sample_cf(), file_name="test_cf")
+        assert os.path.exists("test_cf.csv")
+        df = pd.read_csv("test_cf.csv")
+        assert "Net Change in Cash" in df["Item"].values
+        assert "Ending Cash Balance" in df["Item"].values
+
+    def test_cf_ending_cash_highlighted(self, rg):
+        rg.export_cash_flow(self._sample_cf(), file_name="test_cf")
+        wb = load_workbook("test_cf.xlsx")
+        ws = wb.active
+        for row in ws.iter_rows(min_col=1, max_col=1):
+            cell = row[0]
+            if cell.value == "Ending Cash Balance":
+                assert cell.font.bold
+                break
