@@ -1,11 +1,12 @@
 # QuickBooks Financial Reporting
 
-Generate Profit & Loss and Balance Sheet reports from QuickBooks Online using the QBO API.
+Generate Profit & Loss, Balance Sheet, and Cash Flow reports from QuickBooks Online using the QBO API.
 
 ## Features
 - Fetch invoices, bills, and accounts from QBO with automatic pagination
 - P&L with revenue/expense category breakdowns (from line-item detail)
 - Balance Sheet grouped by account type (Assets, Liabilities, Equity) with subtotals
+- Cash Flow Statement using the indirect method (Operating, Investing, Financing)
 - Professional Excel formatting: styled headers, currency formatting, section highlights
 - Export to Excel or CSV
 - CLI flags for scripted/automated runs, or interactive menu for manual use
@@ -13,7 +14,7 @@ Generate Profit & Loss and Balance Sheet reports from QuickBooks Online using th
 
 ## Tech Stack
 - Python 3.10+
-- `python-quickbooks`, `intuitlib` (QBO API)
+- `python-quickbooks`, `intuit-oauth` (QBO API)
 - `pandas`, `openpyxl` (data processing and Excel output)
 - `pytest` (testing)
 
@@ -50,6 +51,14 @@ python main.py --period monthly --format csv
 
 If no flags are provided, the interactive menu is shown.
 
+## Reports Generated
+
+All three reports are generated automatically for the selected period:
+
+- **Profit & Loss** — Revenue and expense breakdown with category detail, gross profit, and net income
+- **Balance Sheet** — Assets, liabilities, and equity grouped by account type with subtotals
+- **Cash Flow Statement** — Indirect method showing operating adjustments, investing activity, and financing activity
+
 ## Environment Variables
 Required:
 - `CLIENT_ID`
@@ -68,13 +77,15 @@ Optional:
 python -m pytest tests/ -v
 ```
 
+46 tests covering data processing, report generation, and API client logic.
+
 ## Project Structure
 ```
 ├── main.py              # Entry point (CLI + interactive)
 ├── qb_client.py         # QuickBooks API client (pagination, retries)
 ├── data_processor.py    # Data transformation and report logic
 ├── reporting.py         # Excel/CSV report generation with formatting
-├── tests/               # pytest suite
+├── tests/               # pytest suite (46 tests)
 ├── requirements.txt
 ├── .env.example
 └── .github/workflows/   # CI pipeline
