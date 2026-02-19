@@ -257,6 +257,117 @@ class ReportGenerator:
         wb.save(path)
         print(f"[INFO] Balance Sheet report saved as: {path}")
 
+    def _build_cf_rows(self, cf_data):
+        """Build row data for the Cash Flow Statement."""
+        rows = []
+
+        # Operating activities
+        rows.append(("Cash Flows from Operating Activities", None, "section"))
+        rows.append(("Net Income", cf_data["net_income"], "detail"))
+        if cf_data["operating"]:
+            rows.append(("Adjustments:", None, "detail"))
+            for label, amount in cf_data["operating"].items():
+                rows.append((f"  {label}", amount, "detail"))
+        rows.append(("Net Cash from Operations", cf_data["net_operating"], "subtotal"))
+        rows.append(("", None, "spacer"))
+
+        # Investing activities
+        rows.append(("Cash Flows from Investing Activities", None, "section"))
+        if cf_data["investing"]:
+            for label, amount in cf_data["investing"].items():
+                rows.append((f"  {label}", amount, "detail"))
+        rows.append(("Net Cash from Investing", cf_data["net_investing"], "subtotal"))
+        rows.append(("", None, "spacer"))
+
+        # Financing activities
+        rows.append(("Cash Flows from Financing Activities", None, "section"))
+        if cf_data["financing"]:
+            for label, amount in cf_data["financing"].items():
+                rows.append((f"  {label}", amount, "detail"))
+        rows.append(("Net Cash from Financing", cf_data["net_financing"], "subtotal"))
+        rows.append(("", None, "spacer"))
+
+        # Totals
+        rows.append(("Net Change in Cash", cf_data["net_change_in_cash"], "subtotal"))
+        rows.append(("Ending Cash Balance", cf_data["ending_cash"], "total"))
+
+        return rows
+
+    def export_cash_flow(self, cf_data, file_name="cash_flow_report",
+                         start_date=None, end_date=None):
+        """Export a Cash Flow Statement in Excel or CSV format."""
+        rows = self._build_cf_rows(cf_data)
+
+        if self.output_format == "csv":
+            df = pd.DataFrame([(r[0], r[1]) for r in rows if r[2] != "spacer"],
+                              columns=["Item", "Amount"])
+            df.to_csv(f"{file_name}.csv", index=False)
+            print(f"[INFO] Cash Flow report saved as: {file_name}.csv")
+            return
+
+        path = f"{file_name}.xlsx"
+        from openpyxl import Workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Cash Flow"
+
+        # Title
+        ws.merge_cells("A1:B1")
+        ws["A1"].value = "Cash Flow Statement"
+        ws["A1"].font = self._title_font
+        ws["A1"].alignment = Alignment(horizontal="left")
+
+        # Subtitle
+        ws.merge_cells("A2:B2")
+        if start_date and end_date:
+            ws["A2"].value = f"Period: {start_date} to {end_date}"
+        else:
+            ws["A2"].value = "Period: All Dates"
+        ws["A2"].font = self._subtitle_font
+
+        # Column headers
+        for col_num, header in enumerate(["Item", "Amount"], 1):
+            cell = ws.cell(row=4, column=col_num, value=header)
+            cell.font = self._header_font
+            cell.fill = self._header_fill
+            cell.alignment = Alignment(horizontal="center")
+            cell.border = self._thin_border
+
+        # Data rows
+        current_row = 5
+        for label, amount, style in rows:
+            if style == "spacer":
+                current_row += 1
+                continue
+
+            label_cell = ws.cell(row=current_row, column=1, value=label)
+            amt_cell = ws.cell(row=current_row, column=2, value=amount)
+
+            for c in (label_cell, amt_cell):
+                c.border = self._thin_border
+            if amount is not None:
+                amt_cell.number_format = self._currency_format
+                amt_cell.alignment = Alignment(horizontal="right")
+
+            if style == "section":
+                label_cell.font = self._section_font
+                label_cell.fill = self._section_fill
+                amt_cell.fill = self._section_fill
+            elif style == "subtotal":
+                label_cell.font = Font(bold=True, size=11)
+                amt_cell.font = Font(bold=True, size=11)
+            elif style == "total":
+                label_cell.font = self._highlight_font
+                label_cell.fill = self._highlight_fill
+                amt_cell.font = self._highlight_font
+                amt_cell.fill = self._highlight_fill
+
+            current_row += 1
+
+        self._auto_fit_columns(ws)
+        wb.save(path)
+        print(f"[INFO] Cash Flow report saved as: {path}")
+
     def _export_flat_balance_sheet(self, df, file_name, report_date):
         """Flat balance sheet export (no account grouping)."""
         if self.output_format == "csv":

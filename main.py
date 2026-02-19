@@ -190,6 +190,7 @@ def main():
     processor = DataProcessor()
     pl_statement = processor.generate_profit_loss_statement(invoices, bills)
     balance_data = processor.generate_balance_sheet_data(accounts)
+    cf_statement = processor.generate_cash_flow_statement(pl_statement, accounts)
 
     output_format = args.format
     current_date = datetime.now().strftime("%Y_%m_%d")
@@ -198,6 +199,8 @@ def main():
                                   start_date=start_date, end_date=end_date)
     report_gen.export_balance_sheet(balance_data, file_name=f"Balance_Sheet_{current_date}",
                                     report_date=end_date)
+    report_gen.export_cash_flow(cf_statement, file_name=f"Cash_Flow_{current_date}",
+                                start_date=start_date, end_date=end_date)
 
     print("[INFO] Financial reporting completed successfully.")
 
