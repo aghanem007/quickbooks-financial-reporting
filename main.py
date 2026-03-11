@@ -118,6 +118,9 @@ def get_date_range():
             except ValueError:
                 print("[ERROR] Invalid date format. Please use YYYY-MM-DD (e.g., 2024-01-15).")
                 continue
+            if start_date > end_date:
+                print("[ERROR] Start date must be before end date.")
+                continue
             return start_date, end_date
 
         if choice == "5":
@@ -167,6 +170,9 @@ def main():
     if args.period:
         start_date, end_date = resolve_period(args.period)
     elif args.start_date and args.end_date:
+        if args.start_date > args.end_date:
+            print("[ERROR] Start date must be before end date.")
+            sys.exit(1)
         start_date, end_date = args.start_date, args.end_date
     else:
         start_date, end_date = get_date_range()
