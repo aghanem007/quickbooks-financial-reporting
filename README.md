@@ -49,6 +49,11 @@ python main.py --period monthly --format csv
 | `--period` | Preset period: `monthly`, `quarterly`, or `yearly` |
 | `--format` | Output format: `excel` (default) or `csv` |
 
+**Preset period behavior:**
+- `monthly` — previous completed calendar month
+- `quarterly` — previous completed calendar quarter
+- `yearly` — January 1 of the current year through today
+
 If no flags are provided, the interactive menu is shown.
 
 ## Reports Generated
@@ -77,7 +82,7 @@ Optional:
 python -m pytest tests/ -v
 ```
 
-46 tests covering data processing, report generation, and API client logic.
+51 tests covering data processing, report generation, and API client logic.
 
 ## Project Structure
 ```
@@ -85,7 +90,7 @@ python -m pytest tests/ -v
 ├── qb_client.py         # QuickBooks API client (pagination, retries)
 ├── data_processor.py    # Data transformation and report logic
 ├── reporting.py         # Excel/CSV report generation with formatting
-├── tests/               # pytest suite (46 tests)
+├── tests/               # pytest suite (51 tests)
 ├── requirements.txt
 ├── .env.example
 └── .github/workflows/   # CI pipeline
