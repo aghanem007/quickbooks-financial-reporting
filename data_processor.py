@@ -132,7 +132,7 @@ class DataProcessor:
     # Standard ordering for balance sheet sections
     _BS_SECTION_ORDER = ["Bank", "Accounts Receivable", "Other Current Asset",
                          "Fixed Asset", "Other Asset",
-                         "Accounts Payable", "Other Current Liability",
+                         "Accounts Payable", "Credit Card", "Other Current Liability",
                          "Long Term Liability", "Equity"]
 
     _BS_GROUP_MAP = {
