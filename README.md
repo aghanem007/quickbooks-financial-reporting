@@ -1,5 +1,7 @@
 # QuickBooks Financial Reporting
 
+[![Tests](https://github.com/aghanem007/quickbooks-financial-reporting/actions/workflows/test.yml/badge.svg)](https://github.com/aghanem007/quickbooks-financial-reporting/actions/workflows/test.yml)
+
 Generate Profit & Loss, Balance Sheet, and Cash Flow reports from QuickBooks Online using the QBO API.
 
 ## Features
